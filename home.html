@@ -10,6 +10,37 @@
         .friend-item { padding: 15px; border-bottom: 1px solid #eee; display: flex; align-items: center; cursor: pointer; }
         .friend-item:hover { background: #f9f9f9; }
         .avatar { width: 40px; height: 40px; background: #ccc; border-radius: 50%; margin-right: 15px; }
+
+/* home.html 用の追加スタイル */
+.user-item {
+    display: flex;
+    align-items: center;
+    padding: 15px;
+    background: white;
+    border-bottom: 1px solid #eee;
+    transition: background 0.2s;
+}
+
+.user-item:active {
+    background: #e9e9e9; /* タップした瞬間に色が変わる（フィードバック） */
+}
+
+.user-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: #ccc;
+    margin-right: 15px;
+}
+
+.user-info {
+    flex: 1;
+}
+
+.user-name {
+    font-weight: bold;
+    font-size: 16px;
+}
     </style>
 </head>
 <body>

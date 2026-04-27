@@ -1,58 +1,25 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Chat App - Login</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="auth-container">
-        <div class="card">
-            <h1>Chat Login</h1>
-            <input type="email" id="email" placeholder="メールアドレス" style="width:100%; padding:10px; margin-bottom:10px; box-sizing:border-box;">
-            <input type="password" id="password" placeholder="パスワード" style="width:100%; padding:10px; margin-bottom:10px; box-sizing:border-box;">
-            <button id="btn-login" class="btn-primary" style="background:#28a745;">ログイン</button>
-            <button id="btn-signup" class="btn-primary">新規登録</button>
-            <hr>
-            <button id="btn-google" class="btn-google">Googleでログイン</button>
-        </div>
+    <div class="app-container" style="justify-content: center; padding: 20px; gap: 20px;">
+        <h1 style="text-align: center; color: #075e54;">Chat App</h1>
+        <button id="btn-login" style="height: 60px; font-weight: bold; font-size: 18px;">Googleでログイン</button>
     </div>
-
     <script type="module">
-        import { auth, db } from "./firebase-config.js";
-        import { signInWithPopup, GoogleAuthProvider, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-        const provider = new GoogleAuthProvider();
-
-        // ログイン状態の監視
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                // 1. ユーザー情報をFirestoreに保存/更新（これで検索可能になる）
-                await setDoc(doc(db, "users", user.uid), {
-                    name: user.displayName || user.email.split('@')[0],
-                    email: user.email,
-                    uid: user.uid
-                }, { merge: true });
-                
-                // 2. ★ 飛び先を home.html に変更 ★
-                window.location.href = "home.html";
-            }
-        });
-
-        // ログイン・登録ボタンの処理
-        document.getElementById("btn-google").onclick = () => signInWithPopup(auth, provider);
+        import { auth } from "./firebase-config.js";
+        import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         
-        document.getElementById("btn-signup").onclick = () => {
-            const e = document.getElementById("email").value;
-            const p = document.getElementById("password").value;
-            createUserWithEmailAndPassword(auth, e, p).catch(err => alert(err.message));
-        };
-        
-        document.getElementById("btn-login").onclick = () => {
-            const e = document.getElementById("email").value;
-            const p = document.getElementById("password").value;
-            signInWithEmailAndPassword(auth, e, p).catch(err => alert(err.message));
+        onAuthStateChanged(auth, (user) => { if (user) location.href = "home.html"; });
+
+        document.getElementById("btn-login").onclick = async () => {
+            try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+            catch (e) { alert("ログイン失敗: " + e.message); }
         };
     </script>
 </body>

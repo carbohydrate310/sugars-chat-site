@@ -1,56 +1,58 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ログイン</title>
+    <title>Chat App - Login</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div style="text-align: center; margin-top: 50px;">
-        <h1>Chat App</h1>
-        <button id="btn-login" style="padding: 15px 30px; font-size: 18px; cursor: pointer;">Googleでログイン</button>
+    <div class="auth-container">
+        <div class="card">
+            <h1>Chat Login</h1>
+            <input type="email" id="email" placeholder="メールアドレス" style="width:100%; padding:10px; margin-bottom:10px; box-sizing:border-box;">
+            <input type="password" id="password" placeholder="パスワード" style="width:100%; padding:10px; margin-bottom:10px; box-sizing:border-box;">
+            <button id="btn-login" class="btn-primary" style="background:#28a745;">ログイン</button>
+            <button id="btn-signup" class="btn-primary">新規登録</button>
+            <hr>
+            <button id="btn-google" class="btn-google">Googleでログイン</button>
+        </div>
     </div>
 
     <script type="module">
         import { auth, db } from "./firebase-config.js";
-        import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { signInWithPopup, GoogleAuthProvider, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // すでにログイン済みならホームへ
-        onAuthStateChanged(auth, (user) => {
+        const provider = new GoogleAuthProvider();
+
+        // ログイン状態の監視
+        onAuthStateChanged(auth, async (user) => {
             if (user) {
-                // ログイン状態が確認できたら自動で移動
-                setTimeout(() => { location.href = "home.html"; }, 500);
+                // 1. ユーザー情報をFirestoreに保存/更新（これで検索可能になる）
+                await setDoc(doc(db, "users", user.uid), {
+                    name: user.displayName || user.email.split('@')[0],
+                    email: user.email,
+                    uid: user.uid
+                }, { merge: true });
+                
+                // 2. ★ 飛び先を home.html に変更 ★
+                window.location.href = "home.html";
             }
         });
 
-        document.getElementById("btn-login").onclick = async () => {
-            const provider = new GoogleAuthProvider();
-            try {
-                const result = await signInWithPopup(auth, provider);
-                const user = result.user;
-
-                // --- ここが重要：Googleログイン直後にデータベースにユーザーを登録する ---
-                const userRef = doc(db, "users", user.uid);
-                const userSnap = await getDoc(userRef);
-
-                if (!userSnap.exists()) {
-                    // 初めてログインした人なら、Firestoreにデータを保存
-                    await setDoc(userRef, {
-                        name: user.displayName || user.email,
-                        email: user.email,
-                        uid: user.uid,
-                        createdAt: serverTimestamp()
-                    });
-                    console.log("新規ユーザー情報を登録しました");
-                }
-                
-                location.href = "home.html";
-            } catch (error) {
-                console.error("ログインエラー:", error);
-                alert("ログインに失敗しました");
-            }
+        // ログイン・登録ボタンの処理
+        document.getElementById("btn-google").onclick = () => signInWithPopup(auth, provider);
+        
+        document.getElementById("btn-signup").onclick = () => {
+            const e = document.getElementById("email").value;
+            const p = document.getElementById("password").value;
+            createUserWithEmailAndPassword(auth, e, p).catch(err => alert(err.message));
+        };
+        
+        document.getElementById("btn-login").onclick = () => {
+            const e = document.getElementById("email").value;
+            const p = document.getElementById("password").value;
+            signInWithEmailAndPassword(auth, e, p).catch(err => alert(err.message));
         };
     </script>
 </body>

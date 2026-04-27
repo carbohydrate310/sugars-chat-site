@@ -1,32 +1,39 @@
-/* 全体共通 */
-* {
-    box-sizing: border-box;
-    -webkit-tap-highlight-color: transparent; /* タップした時の青い枠を消す */
-}
+/* --- 共通設定 --- */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 body {
-    font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
     margin: 0;
-    background-color: #f0f0f2;
-    color: #333;
-    /* スマホで変にズームされないようにする */
-    touch-action: manipulation;
+    padding: 0;
+    background-color: #e6e7ed; /* 外側の背景色 */
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    display: flex;
+    justify-content: center; /* 横中央 */
 }
 
-/* ボタンをスマホで押しやすく */
-button {
-    cursor: pointer;
-    font-size: 16px; /* 16px未満だとiPhoneでズームされるのを防ぐ */
-    padding: 12px;
-    border-radius: 8px;
-    border: none;
-}
-
-/* 入力欄 */
-input[type="text"], input[type="email"], input[type="password"] {
-    font-size: 16px; /* これ重要！16px以上にすると自動ズームを防げます */
-    padding: 12px;
+/* アプリのコンテナ（PCでは500px、スマホでは全幅） */
+.app-container {
     width: 100%;
-    border: 1px solid #ccc;
-    border-radius: 8px;
+    max-width: 500px;
+    height: 100dvh;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 0 20px rgba(0,0,0,0.1);
+    position: relative;
+    overflow: hidden;
 }
+
+header {
+    height: 60px;
+    background: #075e54;
+    color: white;
+    display: flex;
+    align-items: center;
+    padding: 0 15px;
+    flex-shrink: 0;
+    z-index: 10;
+}
+
+/* ボタン・入力欄のスマホ最適化 */
+button { cursor: pointer; font-size: 16px; border: none; }
+input { font-size: 16px; outline: none; }

@@ -1,11 +1,32 @@
-body { font-family: sans-serif; background: #e5ddd5; margin: 0; }
-.hidden { display: none !important; }
+/* 全体共通 */
+* {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent; /* タップした時の青い枠を消す */
+}
 
-/* カード（ログイン用） */
-.auth-container { display: flex; justify-content: center; align-items: center; height: 100vh; }
-.card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 2px 15px rgba(0,0,0,0.1); width: 320px; text-align: center; }
+body {
+    font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+    margin: 0;
+    background-color: #f0f0f2;
+    color: #333;
+    /* スマホで変にズームされないようにする */
+    touch-action: manipulation;
+}
 
-/* ボタン共通 */
-button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
-.btn-primary { background: #007bff; color: white; width: 100%; margin-top: 10px; }
-.btn-google { background: white; color: #555; border: 1px solid #ddd; width: 100%; margin-top: 10px; }
+/* ボタンをスマホで押しやすく */
+button {
+    cursor: pointer;
+    font-size: 16px; /* 16px未満だとiPhoneでズームされるのを防ぐ */
+    padding: 12px;
+    border-radius: 8px;
+    border: none;
+}
+
+/* 入力欄 */
+input[type="text"], input[type="email"], input[type="password"] {
+    font-size: 16px; /* これ重要！16px以上にすると自動ズームを防げます */
+    padding: 12px;
+    width: 100%;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+}

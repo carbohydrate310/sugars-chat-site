@@ -1,0 +1,11 @@
+body { font-family: sans-serif; background: #e5ddd5; margin: 0; }
+.hidden { display: none !important; }
+
+/* カード（ログイン用） */
+.auth-container { display: flex; justify-content: center; align-items: center; height: 100vh; }
+.card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 2px 15px rgba(0,0,0,0.1); width: 320px; text-align: center; }
+
+/* ボタン共通 */
+button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+.btn-primary { background: #007bff; color: white; width: 100%; margin-top: 10px; }
+.btn-google { background: white; color: #555; border: 1px solid #ddd; width: 100%; margin-top: 10px; }

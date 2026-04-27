@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>友達追加 - Chat App</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .container { max-width: 500px; margin: 20px auto; padding: 10px; }
+        .search-box { display: flex; gap: 10px; margin-bottom: 20px; }
+        input { flex: 1; padding: 10px; border-radius: 5px; border: 1px solid #ccc; }
+        .user-item { background: white; padding: 15px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+<button onclick="location.href='home.html'">← 戻る</button>        <h1>友達を探す</h1>
+        
+        <div class="search-box">
+            <input type="email" id="search-email" placeholder="メールアドレスで検索...">
+            <button id="btn-search" class="btn-primary" style="width: auto; margin: 0;">検索</button>
+        </div>
+
+        <div id="search-result">
+            </div>
+
+        <hr>
+        <h2>友達リスト</h2>
+        <div id="friend-list">
+            </div>
+    </div>
+
+    <script type="module">
+        import { auth, db } from "./firebase-config.js";
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { collection, query, where, getDocs, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // 検索機能
+        document.getElementById("btn-search").onclick = async () => {
+            const email = document.getElementById("search-email").value.trim();
+            const resultDiv = document.getElementById("search-result");
+            resultDiv.innerHTML = "検索中...";
+
+            // Firestoreからユーザーを検索
+            const q = query(collection(db, "users"), where("email", "==", email));
+            const querySnapshot = await getDocs(q);
+
+            if (querySnapshot.empty) {
+                resultDiv.innerHTML = "ユーザーが見つかりませんでした。";
+                return;
+            }
+
+            resultDiv.innerHTML = "";
+            querySnapshot.forEach((userDoc) => {
+                const userData = userDoc.data();
+                if (userDoc.id === auth.currentUser.uid) return; // 自分は除外
+
+                const div = document.createElement("div");
+                div.className = "user-item";
+                div.innerHTML = `
+                    <span>${userData.name || userData.email}</span>
+                    <button class="add-friend-btn" data-id="${userDoc.id}" style="background:#28a745; color:white;">追加</button>
+                `;
+                resultDiv.appendChild(div);
+            });
+        };
+
+        // 友達追加ボタンの処理（イベント委譲）
+        document.addEventListener("click", async (e) => {
+            if (e.target.classList.contains("add-friend-btn")) {
+                const friendId = e.target.getAttribute("data-id");
+                const myId = auth.currentUser.uid;
+
+                // 自分の友達リストに追加
+                await setDoc(doc(db, "users", myId, "friends", friendId), {
+                    addedAt: new Date()
+                });
+                alert("友達を追加しました！");
+                location.reload();
+            }
+        });
+
+        // ログイン状態監視
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) window.location.href = "index.html";
+            // 友達リストの読み込み（簡易実装）
+            const friendSnap = await getDocs(collection(db, "users", user.uid, "friends"));
+            const friendListDiv = document.getElementById("friend-list");
+            friendSnap.forEach(async (fDoc) => {
+                const uSnap = await getDoc(doc(db, "users", fDoc.id));
+                if (uSnap.exists()) {
+                    const div = document.createElement("div");
+                    div.className = "user-item";
+                    div.innerHTML = `<span>${uSnap.data().name || uSnap.data().email}</span>`;
+                    friendListDiv.appendChild(div);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

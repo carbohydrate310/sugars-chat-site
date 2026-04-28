@@ -1,72 +1,86 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>ホーム - Chat App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home</title>
     <link rel="stylesheet" href="style.css">
     <style>
-        .home-container { max-width: 500px; margin: 0 auto; background: white; min-height: 100vh; }
-        .menu-bar { display: flex; justify-content: space-around; padding: 15px; background: #f8f8f8; border-bottom: 1px solid #ddd; }
-        .friend-item { padding: 15px; border-bottom: 1px solid #eee; display: flex; align-items: center; cursor: pointer; }
-        .friend-item:hover { background: #f9f9f9; }
-        .avatar { width: 40px; height: 40px; background: #ccc; border-radius: 50%; margin-right: 15px; }
+        .user-item { display: flex; align-items: center; padding: 15px; background: white; border-bottom: 1px solid #eee; cursor: pointer; }
+        .user-name { font-weight: bold; flex-grow: 1; }
+        .online-status { width: 12px; height: 12px; border-radius: 50%; margin-right: 10px; background: #ccc; transition: background 0.3s; }
+        .online-active { background: #4caf50; box-shadow: 0 0 8px #4caf50; }
+        .status-text { font-size: 10px; margin-left: 5px; }
     </style>
 </head>
 <body>
-    <div class="home-container">
-        <header style="background:#075e54; color:white; padding:15px; text-align:center;">
-            <h2 id="my-name">My Home</h2>
-        </header>
-
-        <div class="menu-bar">
-            <button onclick="location.href='friend.html'">友達追加</button>
-            <button onclick="location.href='bbs.html'">全員の掲示板</button>
-            <button id="btn-logout">ログアウト</button>
-        </div>
-
-        <div style="padding:10px; color:#666; font-size:14px; background:#f0f0f0;">友達リスト</div>
-        <div id="friend-list">
-            </div>
-    </div>
+    <header style="display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; background: #075e54; color: white;">
+        <span style="font-weight:bold;">友達リスト</span>
+        <button id="btn-logout" style="background:none; color:white; border:1px solid white; padding:5px 10px; border-radius:5px; font-size:12px;">ログアウト</button>
+    </header>
+    
+    <div id="user-list"></div>
 
     <script type="module">
         import { auth, db } from "./firebase-config.js";
         import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { collection, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { collection, doc, updateDoc, onSnapshot, serverTimestamp, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         onAuthStateChanged(auth, async (user) => {
             if (!user) {
-                window.location.href = "index.html";
+                location.href = "index.html";
             } else {
-                document.getElementById("my-name").innerText = user.displayName || user.email;
-                loadFriends(user.uid);
+                // 自分のデータがあるか確認（Googleログイン対策）
+                const userRef = doc(db, "users", user.uid);
+                const snap = await getDoc(userRef);
+                if (!snap.exists()) {
+                    await setDoc(userRef, { name: user.displayName || user.email, uid: user.uid });
+                }
+
+                // 生存報告（ハートビート）ループ
+                const heartbeat = () => {
+                    updateDoc(userRef, { lastActive: serverTimestamp() }).catch(() => {});
+                };
+                heartbeat(); // 初回
+                setInterval(heartbeat, 5000); // 5秒ごとに更新
+
+                loadUsers(user.uid);
             }
         });
 
-        document.getElementById("btn-logout").onclick = () => signOut(auth);
+        function loadUsers(myId) {
+            onSnapshot(collection(db, "users"), (snapshot) => {
+                const list = document.getElementById("user-list");
+                list.innerHTML = "";
+                const now = Date.now();
 
-        async function loadFriends(myId) {
-            const listDiv = document.getElementById("friend-list");
-            const snapshot = await getDocs(collection(db, "users", myId, "friends"));
-            
-            if (snapshot.empty) {
-                listDiv.innerHTML = "<p style='padding:20px; text-align:center;'>友達を検索して追加してみよう！</p>";
-                return;
-            }
+                snapshot.forEach(uDoc => {
+                    const data = uDoc.data();
+                    if (data.uid === myId) return;
 
-            for (const fDoc of snapshot.docs) {
-                const uSnap = await getDoc(doc(db, "users", fDoc.id));
-                if (uSnap.exists()) {
-                    const data = uSnap.data();
+                    // 10秒以内ならオンラインと判定
+                    let isOnline = false;
+                    if (data.lastActive) {
+                        const lastActiveTime = data.lastActive.toDate().getTime();
+                        if (now - lastActiveTime < 10000) isOnline = true;
+                    }
+
                     const div = document.createElement("div");
-                    div.className = "friend-item";
-                    div.innerHTML = `<div class="avatar"></div><span>${data.name || data.email}</span>`;
-                    // クリックで個別チャットへ（相手のIDをURLにのせる）
-                    div.onclick = () => location.href = `chat.html?id=${fDoc.id}`;
-                    listDiv.appendChild(div);
-                }
-            }
+                    div.className = "user-item";
+                    div.onclick = () => location.href = `chat.html?id=${data.uid}`;
+                    div.innerHTML = `
+                        <div class="online-status ${isOnline ? 'online-active' : ''}"></div>
+                        <span class="user-name">${data.name || data.email}</span>
+                        <span class="status-text" style="color:${isOnline ? '#4caf50' : '#999'}">
+                            ${isOnline ? 'オンライン' : 'オフライン'}
+                        </span>
+                    `;
+                    list.appendChild(div);
+                });
+            });
         }
+
+        document.getElementById("btn-logout").onclick = () => signOut(auth);
     </script>
 </body>
 </html>

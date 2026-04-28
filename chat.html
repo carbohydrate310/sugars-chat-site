@@ -6,22 +6,25 @@
     <title>Chat</title>
     <link rel="stylesheet" href="style.css">
     <style>
-        #message-list { height: 450px; overflow-y: auto; background: #7494c0; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+        #message-list { height: 400px; overflow-y: auto; background: #7494c0; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
         .msg-row { display: flex; flex-direction: column; max-width: 80%; }
         .msg-me-row { align-self: flex-end; }
         .msg-friend-row { align-self: flex-start; }
-        .msg-bubble { padding: 10px; border-radius: 10px; position: relative; font-size: 15px; }
+        .msg-bubble { padding: 10px; border-radius: 10px; font-size: 15px; }
         .msg-me { background: #dcf8c6; }
         .msg-friend { background: white; }
-        .msg-info { font-size: 10px; color: #555; margin-top: 2px; display: flex; gap: 5px; align-items: center; }
-        /* 削除ボタンの見た目 */
-        .btn-delete {
-            background: none; border: none; color: #ff4d4d; cursor: pointer; 
-            font-size: 12px; padding: 0 5px; opacity: 0.6;
+        .msg-info { font-size: 10px; color: #555; margin-top: 2px; display: flex; gap: 5px; }
+        .btn-delete { background: none; border: none; color: #ff4d4d; cursor: pointer; font-size: 10px; }
+
+        /* スタンプエリアのスタイル */
+        .input-area { padding: 10px; background: white; border-top: 1px solid #ddd; }
+        .controls { display: flex; gap: 5px; align-items: center; margin-bottom: 5px; }
+        #stamp-panel { 
+            display: none; grid-template-columns: repeat(5, 1fr); gap: 10px; 
+            padding: 10px; background: #f9f9f9; border-radius: 8px; margin-bottom: 10px;
         }
-        .btn-delete:hover { opacity: 1; }
-        .input-area { padding: 10px; display: flex; gap: 5px; background: white; }
-        #msg-input { flex: 1; }
+        .stamp-btn { font-size: 24px; background: none; border: none; cursor: pointer; }
+        .stamp-toggle { background: #eee; border-radius: 5px; padding: 5px 10px; font-size: 14px; }
     </style>
 </head>
 <body>
@@ -33,8 +36,24 @@
     <div id="message-list"></div>
 
     <div class="input-area">
-        <input type="text" id="msg-input" placeholder="メッセージを入力...">
-        <button id="btn-send">送信</button>
+        <div id="stamp-panel">
+            <button class="stamp-btn" onclick="sendStamp('👍')">👍</button>
+            <button class="stamp-btn" onclick="sendStamp('😂')">😂</button>
+            <button class="stamp-btn" onclick="sendStamp('🔥')">🔥</button>
+            <button class="stamp-btn" onclick="sendStamp('✅')">✅</button>
+            <button class="stamp-btn" onclick="sendStamp('🙏')">🙏</button>
+            <button class="stamp-btn" onclick="sendStamp('❤️')">❤️</button>
+            <button class="stamp-btn" onclick="sendStamp('😮')">😮</button>
+            <button class="stamp-btn" onclick="sendStamp('😭')">😭</button>
+            <button class="stamp-btn" onclick="sendStamp('✨')">✨</button>
+            <button class="stamp-btn" onclick="sendStamp('🎁')">🎁</button>
+        </div>
+        
+        <div class="controls">
+            <button class="stamp-toggle" onclick="toggleStamps()">😊</button>
+            <input type="text" id="msg-input" placeholder="メッセージ..." style="flex:1;">
+            <button id="btn-send">送信</button>
+        </div>
     </div>
 
     <script type="module">
@@ -54,36 +73,43 @@
             }
         });
 
-        // 送信機能
-        async function send() {
-            const input = document.getElementById("msg-input");
-            const text = input.value.trim();
-            if (text && auth.currentUser) {
-                await addDoc(collection(db, "direct_messages"), {
-                    text: text,
-                    senderId: auth.currentUser.uid,
-                    receiverId: friendId,
-                    members: [auth.currentUser.uid, friendId].sort(),
-                    createdAt: serverTimestamp(),
-                    read: false
-                });
-                input.value = "";
-            }
+        // 送信共通処理
+        async function postMessage(text) {
+            if (!text.trim() || !auth.currentUser) return;
+            await addDoc(collection(db, "direct_messages"), {
+                text: text,
+                senderId: auth.currentUser.uid,
+                receiverId: friendId,
+                members: [auth.currentUser.uid, friendId].sort(),
+                createdAt: serverTimestamp(),
+                read: false
+            });
         }
-        document.getElementById("btn-send").onclick = send;
 
-        // 削除機能の関数
-        window.deleteMessage = async (msgId) => {
-            if (confirm("このメッセージを削除しますか？")) {
-                try {
-                    await deleteDoc(doc(db, "direct_messages", msgId));
-                } catch (e) {
-                    alert("削除に失敗しました: " + e.message);
-                }
-            }
+        // 通常送信
+        document.getElementById("btn-send").onclick = async () => {
+            const input = document.getElementById("msg-input");
+            await postMessage(input.value);
+            input.value = "";
         };
 
-        // メッセージ読み込み
+        // スタンプ送信
+        window.sendStamp = async (emoji) => {
+            await postMessage(emoji);
+            document.getElementById("stamp-panel").style.display = "none";
+        };
+
+        // スタンプパネル開閉
+        window.toggleStamps = () => {
+            const panel = document.getElementById("stamp-panel");
+            panel.style.display = panel.style.display === "grid" ? "none" : "grid";
+        };
+
+        // 削除機能
+        window.deleteMessage = async (id) => {
+            if (confirm("消す？")) await deleteDoc(doc(db, "direct_messages", id));
+        };
+
         function loadMsgs(myId, friendId) {
             const q = query(collection(db, "direct_messages"), where("members", "==", [myId, friendId].sort()), orderBy("createdAt"));
             onSnapshot(q, (snapshot) => {
@@ -92,28 +118,18 @@
                 snapshot.forEach(mDoc => {
                     const d = mDoc.data();
                     if (!d.createdAt) return;
-
-                    // 既読更新
-                    if (d.senderId === friendId && !d.read) {
-                        updateDoc(doc(db, "direct_messages", mDoc.id), { read: true });
-                    }
-
+                    if (d.senderId === friendId && !d.read) updateDoc(doc(db, "direct_messages", mDoc.id), { read: true });
+                    
                     const isMe = d.senderId === myId;
                     const date = d.createdAt.toDate();
                     const time = `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
-
                     const row = document.createElement("div");
                     row.className = `msg-row ${isMe ? 'msg-me-row' : 'msg-friend-row'}`;
-                    
-                    // 自分が送ったメッセージの時だけ削除ボタンを表示
-                    const deleteBtn = isMe ? `<button class="btn-delete" onclick="deleteMessage('${mDoc.id}')">削除</button>` : "";
-
                     row.innerHTML = `
                         <div class="msg-bubble ${isMe ? 'msg-me' : 'msg-friend'}">${d.text}</div>
                         <div class="msg-info">
-                            ${isMe && d.read ? '<span>既読</span>' : ''}
-                            <span>${time}</span>
-                            ${deleteBtn}
+                            <span>${time}</span> ${isMe && d.read ? '<span>既読</span>' : ''}
+                            ${isMe ? `<button class="btn-delete" onclick="deleteMessage('${mDoc.id}')">×</button>` : ''}
                         </div>
                     `;
                     list.appendChild(row);

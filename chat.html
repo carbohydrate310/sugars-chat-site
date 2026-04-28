@@ -10,49 +10,37 @@
         .msg-row { display: flex; flex-direction: column; max-width: 80%; }
         .msg-me-row { align-self: flex-end; }
         .msg-friend-row { align-self: flex-start; }
-        .msg-bubble { padding: 10px; border-radius: 10px; font-size: 15px; }
+        .msg-bubble { padding: 10px; border-radius: 10px; font-size: 15px; word-wrap: break-word; }
         .msg-me { background: #dcf8c6; }
         .msg-friend { background: white; }
-        .msg-info { font-size: 10px; color: #555; margin-top: 2px; display: flex; gap: 5px; }
-        .btn-delete { background: none; border: none; color: #ff4d4d; cursor: pointer; font-size: 10px; }
-
-        /* スタンプエリアのスタイル */
+        .msg-info { font-size: 10px; color: #eee; margin-top: 2px; display: flex; gap: 5px; }
+        .msg-me-row .msg-info { color: #4a6741; }
+        .btn-delete { background: none; border: none; color: #ff4d4d; cursor: pointer; font-size: 10px; margin-left: 5px; }
         .input-area { padding: 10px; background: white; border-top: 1px solid #ddd; }
-        .controls { display: flex; gap: 5px; align-items: center; margin-bottom: 5px; }
-        #stamp-panel { 
-            display: none; grid-template-columns: repeat(5, 1fr); gap: 10px; 
-            padding: 10px; background: #f9f9f9; border-radius: 8px; margin-bottom: 10px;
-        }
+        #stamp-panel { display: none; grid-template-columns: repeat(5, 1fr); gap: 10px; padding: 10px; background: #f9f9f9; border-radius: 8px; margin-bottom: 5px; }
         .stamp-btn { font-size: 24px; background: none; border: none; cursor: pointer; }
-        .stamp-toggle { background: #eee; border-radius: 5px; padding: 5px 10px; font-size: 14px; }
     </style>
 </head>
 <body>
-    <header>
-        <button onclick="location.href='home.html'">←</button>
-        <span id="friend-name">チャット</span>
+    <header style="background: #075e54; color: white; padding: 10px 15px; display: flex; align-items: center;">
+        <button onclick="location.href='home.html'" style="background:none; border:none; color:white; font-size:20px; cursor:pointer;">←</button>
+        <span id="friend-name" style="margin-left:15px; font-weight:bold;">チャット</span>
     </header>
 
     <div id="message-list"></div>
 
     <div class="input-area">
         <div id="stamp-panel">
-            <button class="stamp-btn" onclick="sendStamp('👍')">👍</button>
-            <button class="stamp-btn" onclick="sendStamp('😂')">😂</button>
-            <button class="stamp-btn" onclick="sendStamp('🔥')">🔥</button>
-            <button class="stamp-btn" onclick="sendStamp('✅')">✅</button>
-            <button class="stamp-btn" onclick="sendStamp('🙏')">🙏</button>
-            <button class="stamp-btn" onclick="sendStamp('❤️')">❤️</button>
-            <button class="stamp-btn" onclick="sendStamp('😮')">😮</button>
-            <button class="stamp-btn" onclick="sendStamp('😭')">😭</button>
-            <button class="stamp-btn" onclick="sendStamp('✨')">✨</button>
-            <button class="stamp-btn" onclick="sendStamp('🎁')">🎁</button>
+            <button class="stamp-btn" onclick="sendEmoji('👍')">👍</button>
+            <button class="stamp-btn" onclick="sendEmoji('😂')">😂</button>
+            <button class="stamp-btn" onclick="sendEmoji('🔥')">🔥</button>
+            <button class="stamp-btn" onclick="sendEmoji('🙏')">🙏</button>
+            <button class="stamp-btn" onclick="sendEmoji('❤️')">❤️</button>
         </div>
-        
-        <div class="controls">
-            <button class="stamp-toggle" onclick="toggleStamps()">😊</button>
-            <input type="text" id="msg-input" placeholder="メッセージ..." style="flex:1;">
-            <button id="btn-send">送信</button>
+        <div style="display: flex; gap: 5px;">
+            <button onclick="toggleStamps()" style="background:#eee; border:none; border-radius:5px; padding:5px 10px;">😊</button>
+            <input type="text" id="msg-input" placeholder="メッセージ..." style="flex:1; padding:8px; border:1px solid #ddd; border-radius:5px;">
+            <button id="btn-send" style="background:#075e54; color:white; border:none; padding:8px 15px; border-radius:5px;">送信</button>
         </div>
     </div>
 
@@ -66,48 +54,46 @@
 
         onAuthStateChanged(auth, async (user) => {
             if (!user) location.href = "index.html";
-            if (friendId) {
+            if (user && friendId) {
+                // 生存報告（ハートビート）ループ
+                const heartbeat = () => {
+                    updateDoc(doc(db, "users", user.uid), { lastActive: serverTimestamp() }).catch(() => {});
+                };
+                heartbeat();
+                setInterval(heartbeat, 5000);
+
                 const snap = await getDoc(doc(db, "users", friendId));
                 if (snap.exists()) document.getElementById("friend-name").innerText = snap.data().name || "相手";
                 loadMsgs(user.uid, friendId);
             }
         });
 
-        // 送信共通処理
-        async function postMessage(text) {
-            if (!text.trim() || !auth.currentUser) return;
+        async function post(text) {
+            if (!text.trim()) return;
             await addDoc(collection(db, "direct_messages"), {
-                text: text,
-                senderId: auth.currentUser.uid,
-                receiverId: friendId,
-                members: [auth.currentUser.uid, friendId].sort(),
-                createdAt: serverTimestamp(),
-                read: false
+                text: text, senderId: auth.currentUser.uid, receiverId: friendId,
+                members: [auth.currentUser.uid, friendId].sort(), createdAt: serverTimestamp(), read: false
             });
         }
 
-        // 通常送信
         document.getElementById("btn-send").onclick = async () => {
             const input = document.getElementById("msg-input");
-            await postMessage(input.value);
+            await post(input.value);
             input.value = "";
         };
 
-        // スタンプ送信
-        window.sendStamp = async (emoji) => {
-            await postMessage(emoji);
+        window.sendEmoji = async (emoji) => {
+            await post(emoji);
             document.getElementById("stamp-panel").style.display = "none";
         };
 
-        // スタンプパネル開閉
         window.toggleStamps = () => {
-            const panel = document.getElementById("stamp-panel");
-            panel.style.display = panel.style.display === "grid" ? "none" : "grid";
+            const p = document.getElementById("stamp-panel");
+            p.style.display = p.style.display === "grid" ? "none" : "grid";
         };
 
-        // 削除機能
-        window.deleteMessage = async (id) => {
-            if (confirm("消す？")) await deleteDoc(doc(db, "direct_messages", id));
+        window.delMsg = async (id) => {
+            if (confirm("メッセージを削除しますか？")) await deleteDoc(doc(db, "direct_messages", id));
         };
 
         function loadMsgs(myId, friendId) {
@@ -119,7 +105,7 @@
                     const d = mDoc.data();
                     if (!d.createdAt) return;
                     if (d.senderId === friendId && !d.read) updateDoc(doc(db, "direct_messages", mDoc.id), { read: true });
-                    
+
                     const isMe = d.senderId === myId;
                     const date = d.createdAt.toDate();
                     const time = `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
@@ -129,7 +115,7 @@
                         <div class="msg-bubble ${isMe ? 'msg-me' : 'msg-friend'}">${d.text}</div>
                         <div class="msg-info">
                             <span>${time}</span> ${isMe && d.read ? '<span>既読</span>' : ''}
-                            ${isMe ? `<button class="btn-delete" onclick="deleteMessage('${mDoc.id}')">×</button>` : ''}
+                            ${isMe ? `<button class="btn-delete" onclick="delMsg('${mDoc.id}')">×</button>` : ''}
                         </div>
                     `;
                     list.appendChild(row);

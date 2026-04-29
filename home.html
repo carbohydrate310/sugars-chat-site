@@ -3,84 +3,126 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Home</title>
+    <title>Chat</title>
     <link rel="stylesheet" href="style.css">
     <style>
-        .user-item { display: flex; align-items: center; padding: 15px; background: white; border-bottom: 1px solid #eee; cursor: pointer; }
-        .user-name { font-weight: bold; flex-grow: 1; }
-        .online-status { width: 12px; height: 12px; border-radius: 50%; margin-right: 10px; background: #ccc; transition: background 0.3s; }
-        .online-active { background: #4caf50; box-shadow: 0 0 8px #4caf50; }
-        .status-text { font-size: 10px; margin-left: 5px; }
+        #message-list { height: 400px; overflow-y: auto; background: #7494c0; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .msg-row { display: flex; flex-direction: column; max-width: 80%; }
+        .msg-me-row { align-self: flex-end; }
+        .msg-friend-row { align-self: flex-start; }
+        .msg-bubble { padding: 10px; border-radius: 10px; font-size: 15px; word-wrap: break-word; }
+        .msg-me { background: #dcf8c6; }
+        .msg-friend { background: white; }
+        .msg-info { font-size: 10px; color: #eee; margin-top: 2px; display: flex; gap: 5px; }
+        .msg-me-row .msg-info { color: #4a6741; }
+        .btn-delete { background: none; border: none; color: #ff4d4d; cursor: pointer; font-size: 10px; margin-left: 5px; }
+        .input-area { padding: 10px; background: white; border-top: 1px solid #ddd; }
+        #stamp-panel { display: none; grid-template-columns: repeat(5, 1fr); gap: 10px; padding: 10px; background: #f9f9f9; border-radius: 8px; margin-bottom: 5px; }
+        .stamp-btn { font-size: 24px; background: none; border: none; cursor: pointer; }
     </style>
 </head>
 <body>
-    <header style="display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; background: #075e54; color: white;">
-        <span style="font-weight:bold;">友達リスト</span>
-        <button id="btn-logout" style="background:none; color:white; border:1px solid white; padding:5px 10px; border-radius:5px; font-size:12px;">ログアウト</button>
+    <header style="background: #075e54; color: white; padding: 10px 15px; display: flex; align-items: center;">
+        <button onclick="location.href='home.html'" style="background:none; border:none; color:white; font-size:20px; cursor:pointer;">←</button>
+        <span id="friend-name" style="margin-left:15px; font-weight:bold;">チャット</span>
     </header>
-    
-    <div id="user-list"></div>
+
+    <div id="message-list"></div>
+
+    <div class="input-area">
+        <div id="stamp-panel">
+            <button class="stamp-btn" onclick="sendEmoji('👍')">👍</button>
+            <button class="stamp-btn" onclick="sendEmoji('😂')">😂</button>
+            <button class="stamp-btn" onclick="sendEmoji('🔥')">🔥</button>
+            <button class="stamp-btn" onclick="sendEmoji('🙏')">🙏</button>
+            <button class="stamp-btn" onclick="sendEmoji('❤️')">❤️</button>
+        </div>
+        <div style="display: flex; gap: 5px;">
+            <button onclick="toggleStamps()" style="background:#eee; border:none; border-radius:5px; padding:5px 10px;">😊</button>
+            <input type="text" id="msg-input" placeholder="メッセージ..." style="flex:1; padding:8px; border:1px solid #ddd; border-radius:5px;">
+            <button id="btn-send" style="background:#075e54; color:white; border:none; padding:8px 15px; border-radius:5px;">送信</button>
+        </div>
+    </div>
 
     <script type="module">
         import { auth, db } from "./firebase-config.js";
-        import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { collection, doc, updateDoc, onSnapshot, serverTimestamp, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc, where, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const params = new URLSearchParams(window.location.search);
+        const friendId = params.get("id");
 
         onAuthStateChanged(auth, async (user) => {
-            if (!user) {
-                location.href = "index.html";
-            } else {
-                // 自分のデータがあるか確認（Googleログイン対策）
-                const userRef = doc(db, "users", user.uid);
-                const snap = await getDoc(userRef);
-                if (!snap.exists()) {
-                    await setDoc(userRef, { name: user.displayName || user.email, uid: user.uid });
-                }
-
-                // 生存報告（ハートビート）ループ
+            if (!user) location.href = "index.html";
+            if (user && friendId) {
+                // 生存報告（ハートビート）
                 const heartbeat = () => {
-                    updateDoc(userRef, { lastActive: serverTimestamp() }).catch(() => {});
+                    updateDoc(doc(db, "users", user.uid), { lastActive: serverTimestamp() }).catch(() => {});
                 };
-                heartbeat(); // 初回
-                setInterval(heartbeat, 5000); // 5秒ごとに更新
+                heartbeat();
+                setInterval(heartbeat, 5000);
 
-                loadUsers(user.uid);
+                const snap = await getDoc(doc(db, "users", friendId));
+                if (snap.exists()) document.getElementById("friend-name").innerText = snap.data().name || "相手";
+                loadMsgs(user.uid, friendId);
             }
         });
 
-        function loadUsers(myId) {
-            onSnapshot(collection(db, "users"), (snapshot) => {
-                const list = document.getElementById("user-list");
-                list.innerHTML = "";
-                const now = Date.now();
-
-                snapshot.forEach(uDoc => {
-                    const data = uDoc.data();
-                    if (data.uid === myId) return;
-
-                    // 10秒以内ならオンラインと判定
-                    let isOnline = false;
-                    if (data.lastActive) {
-                        const lastActiveTime = data.lastActive.toDate().getTime();
-                        if (now - lastActiveTime < 10000) isOnline = true;
-                    }
-
-                    const div = document.createElement("div");
-                    div.className = "user-item";
-                    div.onclick = () => location.href = `chat.html?id=${data.uid}`;
-                    div.innerHTML = `
-                        <div class="online-status ${isOnline ? 'online-active' : ''}"></div>
-                        <span class="user-name">${data.name || data.email}</span>
-                        <span class="status-text" style="color:${isOnline ? '#4caf50' : '#999'}">
-                            ${isOnline ? 'オンライン' : 'オフライン'}
-                        </span>
-                    `;
-                    list.appendChild(div);
-                });
+        async function post(text) {
+            if (!text.trim()) return;
+            await addDoc(collection(db, "direct_messages"), {
+                text: text, senderId: auth.currentUser.uid, receiverId: friendId,
+                members: [auth.currentUser.uid, friendId].sort(), createdAt: serverTimestamp(), read: false
             });
         }
 
-        document.getElementById("btn-logout").onclick = () => signOut(auth);
+        document.getElementById("btn-send").onclick = async () => {
+            const input = document.getElementById("msg-input");
+            await post(input.value);
+            input.value = "";
+        };
+
+        window.sendEmoji = async (emoji) => {
+            await post(emoji);
+            document.getElementById("stamp-panel").style.display = "none";
+        };
+
+        window.toggleStamps = () => {
+            const p = document.getElementById("stamp-panel");
+            p.style.display = p.style.display === "grid" ? "none" : "grid";
+        };
+
+        window.delMsg = async (id) => {
+            if (confirm("メッセージを削除しますか？")) await deleteDoc(doc(db, "direct_messages", id));
+        };
+
+        function loadMsgs(myId, friendId) {
+            const q = query(collection(db, "direct_messages"), where("members", "==", [myId, friendId].sort()), orderBy("createdAt"));
+            onSnapshot(q, (snapshot) => {
+                const list = document.getElementById("message-list");
+                list.innerHTML = "";
+                snapshot.forEach(mDoc => {
+                    const d = mDoc.data();
+                    if (!d.createdAt) return;
+                    if (d.senderId === friendId && !d.read) updateDoc(doc(db, "direct_messages", mDoc.id), { read: true });
+
+                    const isMe = d.senderId === myId;
+                    const date = d.createdAt.toDate();
+                    const time = `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+                    const row = document.createElement("div");
+                    row.className = `msg-row ${isMe ? 'msg-me-row' : 'msg-friend-row'}`;
+                    row.innerHTML = `
+                        <div class="msg-bubble ${isMe ? 'msg-me' : 'msg-friend'}">${d.text}</div>
+                        <div class="msg-info">
+                            <span>${time}</span> ${isMe && d.read ? '<span>既読</span>' : ''}
+                            ${isMe ? `<button class="btn-delete" onclick="delMsg('${mDoc.id}')">×</button>` : ''}
+                        </div>
+                    `;
+                    list.appendChild(row);
+                });
+                list.scrollTop = list.scrollHeight;
+            });
+        }
     </script>
 </body>
 </html>

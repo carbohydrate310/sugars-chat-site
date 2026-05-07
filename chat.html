@@ -2,127 +2,64 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat</title>
+    <title>Chat Room</title>
     <link rel="stylesheet" href="style.css">
-    <style>
-        #message-list { height: 400px; overflow-y: auto; background: #7494c0; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
-        .msg-row { display: flex; flex-direction: column; max-width: 80%; }
-        .msg-me-row { align-self: flex-end; }
-        .msg-friend-row { align-self: flex-start; }
-        .msg-bubble { padding: 10px; border-radius: 10px; font-size: 15px; word-wrap: break-word; }
-        .msg-me { background: #dcf8c6; }
-        .msg-friend { background: white; }
-        .msg-info { font-size: 10px; color: #eee; margin-top: 2px; display: flex; gap: 5px; }
-        .msg-me-row .msg-info { color: #4a6741; }
-        .btn-delete { background: none; border: none; color: #ff4d4d; cursor: pointer; font-size: 10px; margin-left: 5px; }
-        .input-area { padding: 10px; background: white; border-top: 1px solid #ddd; }
-        #stamp-panel { display: none; grid-template-columns: repeat(5, 1fr); gap: 10px; padding: 10px; background: #f9f9f9; border-radius: 8px; margin-bottom: 5px; }
-        .stamp-btn { font-size: 24px; background: none; border: none; cursor: pointer; }
-    </style>
 </head>
 <body>
-    <header style="background: #075e54; color: white; padding: 10px 15px; display: flex; align-items: center;">
-        <button onclick="location.href='home.html'" style="background:none; border:none; color:white; font-size:20px; cursor:pointer;">←</button>
-        <span id="friend-name" style="margin-left:15px; font-weight:bold;">チャット</span>
+    <header style="background:#075e54; color:white; padding:15px;">
+        <button onclick="location.href='home.html'">←</button>
+        <span id="chat-target-name">相手の名前</span>
     </header>
-
-    <div id="message-list"></div>
-
-    <div class="input-area">
-        <div id="stamp-panel">
-            <button class="stamp-btn" onclick="sendEmoji('👍')">👍</button>
-            <button class="stamp-btn" onclick="sendEmoji('😂')">😂</button>
-            <button class="stamp-btn" onclick="sendEmoji('🔥')">🔥</button>
-            <button class="stamp-btn" onclick="sendEmoji('🙏')">🙏</button>
-            <button class="stamp-btn" onclick="sendEmoji('❤️')">❤️</button>
-        </div>
-        <div style="display: flex; gap: 5px;">
-            <button onclick="toggleStamps()" style="background:#eee; border:none; border-radius:5px; padding:5px 10px;">😊</button>
-            <input type="text" id="msg-input" placeholder="メッセージ..." style="flex:1; padding:8px; border:1px solid #ddd; border-radius:5px;">
-            <button id="btn-send" style="background:#075e54; color:white; border:none; padding:8px 15px; border-radius:5px;">送信</button>
-        </div>
+    <div id="msg-list" style="height:450px; overflow-y:auto; background:#e5ddd5; padding:10px;"></div>
+    <div style="padding:10px; display:flex;">
+        <input type="text" id="msg-input" style="flex:1;">
+        <button id="btn-send">送信</button>
     </div>
 
     <script type="module">
         import { auth, db } from "./firebase-config.js";
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc, where, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { collection, addDoc, query, orderBy, onSnapshot, where, serverTimestamp, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        const params = new URLSearchParams(window.location.search);
-        const friendId = params.get("id");
+        const friendId = new URLSearchParams(window.location.search).get("id");
 
         onAuthStateChanged(auth, async (user) => {
             if (!user) location.href = "index.html";
-            if (user && friendId) {
-                // 生存報告（ハートビート）ループ
-                const heartbeat = () => {
-                    updateDoc(doc(db, "users", user.uid), { lastActive: serverTimestamp() }).catch(() => {});
-                };
-                heartbeat();
-                setInterval(heartbeat, 5000);
-
+            if (friendId) {
                 const snap = await getDoc(doc(db, "users", friendId));
-                if (snap.exists()) document.getElementById("friend-name").innerText = snap.data().name || "相手";
-                loadMsgs(user.uid, friendId);
+                if (snap.exists()) document.getElementById("chat-target-name").innerText = snap.data().name;
+                loadMessages(user.uid, friendId);
             }
         });
 
-        async function post(text) {
+        async function send() {
+            const text = document.getElementById("msg-input").value;
             if (!text.trim()) return;
             await addDoc(collection(db, "direct_messages"), {
-                text: text, senderId: auth.currentUser.uid, receiverId: friendId,
-                members: [auth.currentUser.uid, friendId].sort(), createdAt: serverTimestamp(), read: false
+                text, senderId: auth.currentUser.uid, receiverId: friendId,
+                members: [auth.currentUser.uid, friendId].sort(),
+                createdAt: serverTimestamp()
             });
+            document.getElementById("msg-input").value = "";
         }
+        document.getElementById("btn-send").onclick = send;
 
-        document.getElementById("btn-send").onclick = async () => {
-            const input = document.getElementById("msg-input");
-            await post(input.value);
-            input.value = "";
-        };
-
-        window.sendEmoji = async (emoji) => {
-            await post(emoji);
-            document.getElementById("stamp-panel").style.display = "none";
-        };
-
-        window.toggleStamps = () => {
-            const p = document.getElementById("stamp-panel");
-            p.style.display = p.style.display === "grid" ? "none" : "grid";
-        };
-
-        window.delMsg = async (id) => {
-            if (confirm("メッセージを削除しますか？")) await deleteDoc(doc(db, "direct_messages", id));
-        };
-
-        function loadMsgs(myId, friendId) {
-            const q = query(collection(db, "direct_messages"), where("members", "==", [myId, friendId].sort()), orderBy("createdAt"));
+        function loadMessages(myId, friendId) {
+            const q = query(collection(db, "direct_messages"), 
+                where("members", "==", [myId, friendId].sort()), orderBy("createdAt"));
             onSnapshot(q, (snapshot) => {
-                const list = document.getElementById("message-list");
+                const list = document.getElementById("msg-list");
                 list.innerHTML = "";
                 snapshot.forEach(mDoc => {
                     const d = mDoc.data();
-                    if (!d.createdAt) return;
-                    if (d.senderId === friendId && !d.read) updateDoc(doc(db, "direct_messages", mDoc.id), { read: true });
-
                     const isMe = d.senderId === myId;
-                    const date = d.createdAt.toDate();
-                    const time = `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
-                    const row = document.createElement("div");
-                    row.className = `msg-row ${isMe ? 'msg-me-row' : 'msg-friend-row'}`;
-                    row.innerHTML = `
-                        <div class="msg-bubble ${isMe ? 'msg-me' : 'msg-friend'}">${d.text}</div>
-                        <div class="msg-info">
-                            <span>${time}</span> ${isMe && d.read ? '<span>既読</span>' : ''}
-                            ${isMe ? `<button class="btn-delete" onclick="delMsg('${mDoc.id}')">×</button>` : ''}
-                        </div>
-                    `;
-                    list.appendChild(row);
+                    const div = document.createElement("div");
+                    div.style = `margin:5px; text-align:${isMe?'right':'left'};`;
+                    div.innerHTML = `<div style="display:inline-block; padding:10px; background:${isMe?'#dcf8c6':'white'}; border-radius:10px;">${d.text}</div>`;
+                    list.appendChild(div);
                 });
                 list.scrollTop = list.scrollHeight;
             });
         }
     </script>
 </body>
-</html>

@@ -1,59 +1,107 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Chat App - Login</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Chat App</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f0f2f5; }
+        .login-card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 350px; }
+        h2 { text-align: center; color: #075e54; }
+        input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: #075e54; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: 10px; }
+        .toggle-link { text-align: center; margin-top: 15px; font-size: 14px; color: #555; cursor: pointer; text-decoration: underline; }
+        .google-btn { background: #4285f4; margin-top: 20px; }
+    </style>
 </head>
 <body>
-    <div class="auth-container">
-        <div class="card">
-            <h1>Chat Login</h1>
-            <input type="email" id="email" placeholder="メールアドレス" style="width:100%; padding:10px; margin-bottom:10px; box-sizing:border-box;">
-            <input type="password" id="password" placeholder="パスワード" style="width:100%; padding:10px; margin-bottom:10px; box-sizing:border-box;">
-            <button id="btn-login" class="btn-primary" style="background:#28a745;">ログイン</button>
-            <button id="btn-signup" class="btn-primary">新規登録</button>
-            <hr>
-            <button id="btn-google" class="btn-google">Googleでログイン</button>
-        </div>
+
+<div class="login-card" id="auth-container">
+    <h2 id="form-title">ログイン</h2>
+    
+    <div id="register-fields" style="display: none;">
+        <input type="text" id="display-name" placeholder="表示名（ニックネーム）">
     </div>
+    
+    <input type="text" id="username" placeholder="ユーザー名 (英数字)">
+    <input type="password" id="password" placeholder="パスワード">
+    
+    <button id="btn-main">ログイン</button>
+    <button id="btn-google" class="google-btn">Googleでログイン</button>
+    
+    <div class="toggle-link" id="toggle-auth">新規登録はこちら</div>
+</div>
 
-    <script type="module">
-        import { auth, db } from "./firebase-config.js";
-        import { signInWithPopup, GoogleAuthProvider, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+<script type="module">
+    import { auth, db } from "./firebase-config.js";
+    import { createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { doc, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        const provider = new GoogleAuthProvider();
+    let isLoginMode = true;
 
-        // ログイン状態の監視
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                // 1. ユーザー情報をFirestoreに保存/更新（これで検索可能になる）
-                await setDoc(doc(db, "users", user.uid), {
-                    name: user.displayName || user.email.split('@')[0],
-                    email: user.email,
-                    uid: user.uid
-                }, { merge: true });
-                
-                // 2. ★ 飛び先を home.html に変更 ★
-                window.location.href = "home.html";
+    // モード切り替え
+    document.getElementById("toggle-auth").onclick = () => {
+        isLoginMode = !isLoginMode;
+        document.getElementById("form-title").innerText = isLoginMode ? "ログイン" : "新規登録";
+        document.getElementById("btn-main").innerText = isLoginMode ? "ログイン" : "登録する";
+        document.getElementById("register-fields").style.display = isLoginMode ? "none" : "block";
+        document.getElementById("toggle-auth").innerText = isLoginMode ? "新規登録はこちら" : "ログインはこちら";
+    };
+
+    // メインボタン処理
+    document.getElementById("btn-main").onclick = async () => {
+        const username = document.getElementById("username").value.trim();
+        const pass = document.getElementById("password").value;
+        const displayName = document.getElementById("display-name").value.trim();
+        
+        if(!username || !pass) return alert("入力してください");
+        
+        // ユーザー名をメール形式に変換してFirebase Authを使用
+        const email = `${username}@chat.app`;
+
+        try {
+            if (isLoginMode) {
+                await signInWithEmailAndPassword(auth, email, pass);
+            } else {
+                if(!displayName) return alert("表示名を入力してください");
+                const res = await createUserWithEmailAndPassword(auth, email, pass);
+                // Firestoreにユーザー情報を保存
+                await setDoc(doc(db, "users", res.user.uid), {
+                    name: displayName,
+                    username: username,
+                    uid: res.user.uid,
+                    createdAt: serverTimestamp()
+                });
             }
-        });
+            location.href = "home.html";
+        } catch (e) {
+            alert("エラー: " + e.message);
+        }
+    };
 
-        // ログイン・登録ボタンの処理
-        document.getElementById("btn-google").onclick = () => signInWithPopup(auth, provider);
-        
-        document.getElementById("btn-signup").onclick = () => {
-            const e = document.getElementById("email").value;
-            const p = document.getElementById("password").value;
-            createUserWithEmailAndPassword(auth, e, p).catch(err => alert(err.message));
-        };
-        
-        document.getElementById("btn-login").onclick = () => {
-            const e = document.getElementById("email").value;
-            const p = document.getElementById("password").value;
-            signInWithEmailAndPassword(auth, e, p).catch(err => alert(err.message));
-        };
-    </script>
+    // Googleログイン
+    document.getElementById("btn-google").onclick = async () => {
+        const provider = new GoogleAuthProvider();
+        try {
+            const res = await signInWithPopup(auth, provider);
+            const user = res.user;
+            const userRef = doc(db, "users", user.uid);
+            const snap = await getDoc(userRef);
+            
+            if (!snap.exists()) {
+                await setDoc(userRef, {
+                    name: user.displayName,
+                    username: user.email.split('@')[0],
+                    uid: user.uid,
+                    createdAt: serverTimestamp()
+                });
+            }
+            location.href = "home.html";
+        } catch (e) {
+            alert(e.message);
+        }
+    };
+</script>
 </body>
 </html>
